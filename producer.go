@@ -35,14 +35,14 @@ func (p *RabbitProducer) Shutdown() error {
 		return nil
 	}
 
-	if p.c.Ch != nil {
-		if err := p.c.Ch.Close(); err != nil {
+	if p.c.ch != nil {
+		if err := p.c.ch.Close(); err != nil {
 			return err
 		}
 	}
 
-	if p.c.Cn != nil {
-		if err := p.c.Cn.Close(); err != nil {
+	if p.c.cn != nil {
+		if err := p.c.cn.Close(); err != nil {
 			return err
 		}
 	}
@@ -89,7 +89,7 @@ func (p *RabbitProducer) send(message amqp.Publishing, timeout time.Duration, op
 		return err
 	}
 
-	err = sendMessageWithRetry(p.c.Ch, p.options.Exchange.Name, p.options.Queue.Name, message, timeout, 10, options)
+	err = sendMessageWithRetry(p.c.ch, p.options.Exchange.Name, p.options.Queue.Name, message, timeout, 10, options)
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func connectToQueue(options Options) (*Connector, error) {
 
 	for {
 
-		connector, err := Queue(options)
+		connector, err := setupQueue(options)
 		if err == nil {
 			return connector, nil
 		}
@@ -193,10 +193,10 @@ func resetConnector(src, dst *Connector) {
 	src.Lock()
 	defer src.Unlock()
 
-	src.Ch = dst.Ch
-	src.Cn = dst.Cn
-	src.ErrorCh = make(chan *amqp.Error, 1)
-	src.Ch.NotifyClose(src.ErrorCh)
+	src.ch = dst.ch
+	src.cn = dst.cn
+	src.errorCh = make(chan *amqp.Error, 1)
+	src.ch.NotifyClose(src.errorCh)
 
 }
 
@@ -216,7 +216,7 @@ func tryConnect(connector *Connector, options Options) (*Connector, error) {
 
 func onCheckChannelErrors(connector *Connector, options Options) {
 
-	for range connector.ErrorCh {
+	for range connector.errorCh {
 
 		tryConnect(connector, options)
 
@@ -232,9 +232,9 @@ func createPublisherConnector(options Options) (*Connector, error) {
 	}
 
 	errorCh := make(chan *amqp.Error, 1)
-	connector.ErrorCh = errorCh
-	if connector.Ch != nil {
-		connector.Ch.NotifyClose(errorCh)
+	connector.errorCh = errorCh
+	if connector.ch != nil {
+		connector.ch.NotifyClose(errorCh)
 	}
 
 	go onCheckChannelErrors(connector, options)

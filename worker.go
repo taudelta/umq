@@ -110,7 +110,7 @@ func (w *Worker) onDelivery(deliveries <-chan amqp.Delivery, bufferedChannel cha
 	// блокировка в ожидании новых сообщений
 	for d := range deliveries {
 		w.logger.Debug().Printf("get raw message: %+v\n", d)
-		if w.connector.NeedShutdown {
+		if w.connector.needShutdown {
 			continue
 		}
 		bufferedChannel <- d
@@ -118,7 +118,7 @@ func (w *Worker) onDelivery(deliveries <-chan amqp.Delivery, bufferedChannel cha
 
 	w.logger.Debug().Println("worker deliveries channel closed")
 
-	if w.connector.NeedShutdown {
+	if w.connector.needShutdown {
 		w.logger.Debug().Println("successfull shutdown")
 		return
 	}
@@ -180,19 +180,21 @@ func (w *Worker) waitShutdown(connector *Connector, completeCh chan bool, shutdo
 
 	for {
 
-		if !connector.NeedShutdown {
+		if !connector.needShutdown {
 			time.Sleep(time.Second)
 			continue
 		}
 
 		select {
 		case <-completeCh:
-			// executing when worker receive terminate event and complete last message handling
+			// executing only after worker receive terminate event and complete last message handling
 			w.logger.Info().Printf("Worker(%p) - complete(shutdown)", connector)
 			w.onShutdown(completeCh, shutdownWg)
 			return
 
 		case <-time.After(shutdownTimeout):
+
+			// executing after gracefull timeout
 
 			w.logger.Info().Printf("Worker(%p) - timeout shutdown after %v", connector, shutdownTimeout)
 			if connector.tryExecLock() {

@@ -55,17 +55,17 @@ func newConsumerConnector(options *ConsumeOptions) (*Connector, <-chan amqp.Deli
 
 	queueOptions := options.Options
 
-	connector, err := Queue(queueOptions)
+	connector, err := setupQueue(queueOptions)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	err = connector.Ch.Qos(options.PrefetchCount, options.PrefetchSize, false)
+	err = connector.ch.Qos(options.PrefetchCount, options.PrefetchSize, false)
 	if err != nil {
 		return nil, nil, fmt.Errorf("set qos error: %s", err)
 	}
 
-	deliveries, err := connector.Ch.Consume(
+	deliveries, err := connector.ch.Consume(
 		queueOptions.Queue.Name,
 		queueOptions.Exchange.Name,
 		options.AutoAck,
@@ -105,11 +105,11 @@ func waitAndStop(consumer *Consumer, stopWaitPeriod time.Duration, doneCh chan b
 	for _, worker := range consumer.workers {
 
 		c := worker.connector
-		if c == nil || c.Ch == nil {
+		if c == nil || c.ch == nil {
 			continue
 		}
 
-		state, err := c.Ch.QueueInspect(consumer.Options.Options.Queue.Name)
+		state, err := c.ch.QueueInspect(consumer.Options.Options.Queue.Name)
 		if err != nil {
 			continue
 		}

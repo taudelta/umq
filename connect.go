@@ -13,14 +13,13 @@ const (
 )
 
 type Connector struct {
-	sync.RWMutex // hold on reconnection and protects
+	sync.RWMutex // hold on while reconnection and protects simultaneous access to attributes
 	options      Options
-	Ch           *amqp.Channel
-	Cn           *amqp.Connection
-	ErrorCh      chan *amqp.Error
-	NeedShutdown bool
+	ch           *amqp.Channel
+	cn           *amqp.Connection
+	errorCh      chan *amqp.Error
+	needShutdown bool
 	terminateCh  chan struct{}
-	shutdownWg   *sync.WaitGroup
 	execLock     sync.Mutex
 }
 
@@ -45,7 +44,7 @@ func (c *Connector) tryExecLock() bool {
 func (c *Connector) terminate() {
 	c.Lock()
 	defer c.Unlock()
-	c.NeedShutdown = true
+	c.needShutdown = true
 	go func() {
 		c.terminateCh <- struct{}{}
 	}()
@@ -54,10 +53,10 @@ func (c *Connector) terminate() {
 func (c *Connector) close() error {
 	c.Lock()
 	defer c.Unlock()
-	if c.Cn == nil {
+	if c.cn == nil {
 		return nil
 	}
-	if err := c.Cn.Close(); err != nil {
+	if err := c.cn.Close(); err != nil {
 		return err
 	}
 	return nil
@@ -102,8 +101,8 @@ type Options struct {
 	Bind     BindOptions
 }
 
-// Queue creates connection to RabbitMQ server, declares queue and binds it to the exchange
-func Queue(options Options) (*Connector, error) {
+// setupQueue creates connection to RabbitMQ server, declares queue and binds it to the exchange
+func setupQueue(options Options) (*Connector, error) {
 
 	conn, err := amqp.Dial(
 		fmt.Sprintf(
@@ -165,8 +164,8 @@ func Queue(options Options) (*Connector, error) {
 
 	return &Connector{
 		options:     options,
-		Ch:          mqChannel,
-		Cn:          conn,
+		ch:          mqChannel,
+		cn:          conn,
 		terminateCh: make(chan struct{}, 1),
 	}, nil
 }
